@@ -1,0 +1,22 @@
+; Development project. Copy addons/hermes_mcp into your own project.
+config_version=5
+
+[application]
+config/name="Hermes Godot MCP"
+run/main_scene="res://examples/playground.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+
+[autoload]
+HermesMCPRuntime="*res://addons/hermes_mcp/runtime/runtime_bridge.gd"
+
+[display]
+window/size/viewport_width=960
+window/size/viewport_height=540
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/hermes_mcp/plugin.cfg")
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
