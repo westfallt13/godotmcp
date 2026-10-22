@@ -1,7 +1,7 @@
 # Hermes Godot MCP
 
 A native **Godot 4.5+ editor plugin** that exposes the open project to
-[Hermes Agent](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp)
+[Hermes Agent]([https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp](https://hermes-agent.nousresearch.com/))
 through MCP Streamable HTTP. Enabling the addon starts the server inside the
 editor; reopening that project starts it again. No Node.js, Python, sidecar
 server, or external Godot process is needed for the installed addon.
