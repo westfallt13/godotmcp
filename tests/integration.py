@@ -86,10 +86,11 @@ class Environment:
             shutil.copytree(ROOT / folder, self.project / folder)
         port, dap_port, debug_port = free_port(), free_port(), free_port()
         config = (ROOT / "project.godot").read_text()
+        # Exercise a fresh installation, including Godot 4.6's UID autoloads.
+        config = config.replace('HermesMCPRuntime="*res://addons/hermes_mcp/runtime/runtime_bridge.gd"', '')
         config += f'\n[hermes_mcp]\nport={port}\ndap_port={dap_port}\n'
         (self.project / "project.godot").write_text(config)
         self.log_path = self.directory / "editor.log"
-        self.log = self.log_path.open("w")
         env = os.environ.copy()
         for name in ("DATA", "CONFIG", "CACHE"):
             env[f"XDG_{name}_HOME"] = str(self.directory / name.lower())
@@ -103,7 +104,12 @@ class Environment:
         command = [godot, "--editor", "--path", str(self.project), "--audio-driver", "Dummy"]
         if not graphical:
             command.append("--headless")
-        self.process = subprocess.Popen(command, stdout=self.log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+        self.command, self.environment = command, env
+        self.start()
+
+    def start(self):
+        self.log = self.log_path.open("a")
+        self.process = subprocess.Popen(self.command, stdout=self.log, stderr=subprocess.STDOUT, env=self.environment, start_new_session=True)
         target = self.project / ".godot/hermes_mcp/connection.json"
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
@@ -349,12 +355,62 @@ class Integration(unittest.TestCase):
         self.assertFalse(c.tool("play", action="stop")["playing"])
         c.tool("runtime", action="tree", error=True)
 
+    def assert_editor_layout(self):
+        if not OPTIONS.graphical:
+            return
+        layout = self.client.tool("editor_execute", code='''var controls = {}
+var queue = [editor.get_base_control()]
+while not queue.is_empty():
+	var node = queue.pop_front()
+	if node is Control and node.get_class() in ["FileSystemDock", "EditorBottomPanel"]:
+		controls[node.get_class()] = {"rect": node.get_global_rect(), "visible": node.is_visible_in_tree()}
+	queue.append_array(node.get_children())
+return {"controls": controls, "rect": editor.get_base_control().get_global_rect()}''')["value"]
+        viewport = layout["rect"]
+        for name in ("FileSystemDock", "EditorBottomPanel"):
+            control = layout["controls"][name]
+            self.assertTrue(control["visible"], name)
+            for axis in ("x", "y"):
+                start = control["rect"]["position"][axis]
+                end = start + control["rect"]["size"][axis]
+                self.assertGreaterEqual(start, viewport["position"][axis] - 1, name)
+                self.assertLessEqual(end, viewport["position"][axis] + viewport["size"][axis] + 1, name)
+
+    def test_03_editor_layout(self):
+        self.assert_editor_layout()
+
+    def test_89_autoload_identity(self):
+        result = self.client.tool("editor_execute", code='''var probe_plugin = load("res://addons/hermes_mcp/plugin.gd").new()
+var key = "autoload/HermesMCPRuntime"
+var original = ProjectSettings.get_setting(key)
+var runtime_path = "res://addons/hermes_mcp/runtime/runtime_bridge.gd"
+var uid_path = ResourceUID.id_to_text(ResourceLoader.get_resource_uid(runtime_path))
+var own = []
+for path in [runtime_path, "*" + runtime_path, uid_path, "*" + uid_path]:
+	ProjectSettings.set_setting(key, path)
+	own.append(probe_plugin._owns_runtime_autoload())
+var foreign_path = "*" + ResourceUID.id_to_text(ResourceLoader.get_resource_uid("res://examples/playground.gd"))
+ProjectSettings.set_setting(key, foreign_path)
+var foreign_owned = probe_plugin._owns_runtime_autoload()
+probe_plugin._disable_plugin()
+var foreign_preserved = ProjectSettings.get_setting(key) == foreign_path
+ProjectSettings.set_setting(key, original)
+probe_plugin.free()
+return {"own": own, "foreign_owned": foreign_owned, "foreign_preserved": foreign_preserved}''')["value"]
+        self.assertEqual(result["own"], [True] * 4)
+        self.assertFalse(result["foreign_owned"])
+        self.assertTrue(result["foreign_preserved"])
+
     def test_90_plugin_lifecycle(self):
         c = self.client
         original_token = c.token
         code = ('editor.set_plugin_enabled.call_deferred("hermes_mcp", false)\n'
                 'editor.get_base_control().get_tree().create_timer(0.5).timeout.connect('
-                'func(): editor.set_plugin_enabled("hermes_mcp", true))\nreturn true')
+                'func():\n'
+                '\tvar file = FileAccess.open("res://autoload_after_disable.json", FileAccess.WRITE)\n'
+                '\tfile.store_string(JSON.stringify(ProjectSettings.has_setting("autoload/HermesMCPRuntime")))\n'
+                '\tfile.close()\n'
+                '\teditor.set_plugin_enabled("hermes_mcp", true))\nreturn true')
         # The disable closes the in-flight connection; either outcome is valid.
         try:
             c.tool("editor_execute", code=code)
@@ -375,8 +431,30 @@ class Integration(unittest.TestCase):
         c.initialize()
         self.assertEqual(c.token, original_token)
         self.assertTrue(c.tool("project_info")["name"])
-        self.assertEqual(c.tool("project_setting", action="get", key="autoload/HermesMCPRuntime")["value"],
-                         "*res://addons/hermes_mcp/runtime/runtime_bridge.gd")
+        self.assertFalse(json.loads((self.env.project / "autoload_after_disable.json").read_text()))
+        self.assertTrue(c.tool("editor_execute", code='''var path = str(ProjectSettings.get_setting("autoload/HermesMCPRuntime")).trim_prefix("*")
+if path.begins_with("uid://"):
+	path = ResourceUID.get_id_path(ResourceUID.text_to_id(path))
+return path == "res://addons/hermes_mcp/runtime/runtime_bridge.gd"''')["value"])
+        self.assertNotIn("autoload name HermesMCPRuntime is already in use", self.env.log_path.read_text())
+        self.assert_editor_layout()
+
+    def test_91_editor_restart(self):
+        self.env.close()
+        self.env.start()
+        self.client = self.env.client
+        self.assertTrue(self.client.tool("project_info")["name"])
+        self.assertNotIn("autoload name HermesMCPRuntime is already in use", self.env.log_path.read_text())
+        self.assert_editor_layout()
+        # Verify that the persisted autoload still supports runtime tools.
+        self.client.tool("play", action="start")
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if self.client.tool("play", action="status")["sessions"]:
+                break
+            time.sleep(.1)
+        self.assertTrue(self.client.tool("runtime", action="tree"))
+        self.client.tool("play", action="stop")
 
 
 def main():

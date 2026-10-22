@@ -38,7 +38,7 @@ func info() -> Dictionary:
 	var selected: Array = []
 	for node in EditorInterface.get_selection().get_selected_nodes():
 		selected.append(str(root.get_path_to(node)) if root else str(node.get_path()))
-	return {"name": ProjectSettings.get_setting("application/config/name", ""), "path": ProjectSettings.globalize_path("res://"), "godot": Engine.get_version_info(), "main_scene": ProjectSettings.get_setting("application/run/main_scene", ""), "open_scenes": Array(EditorInterface.get_open_scenes()), "current_scene": root.scene_file_path if root else null, "selected_nodes": selected, "playing": EditorInterface.is_playing_scene(), "display": DisplayServer.get_name(), "server_version": "1.0.0", "trusted_code_execution": ProjectSettings.get_setting("hermes_mcp/allow_code_execution", true), "dap_port": plugin.dap.port, "runtime_sessions": plugin.debugger.status()}
+	return {"name": ProjectSettings.get_setting("application/config/name", ""), "path": ProjectSettings.globalize_path("res://"), "godot": Engine.get_version_info(), "main_scene": ProjectSettings.get_setting("application/run/main_scene", ""), "open_scenes": Array(EditorInterface.get_open_scenes()), "current_scene": root.scene_file_path if root else null, "selected_nodes": selected, "playing": EditorInterface.is_playing_scene(), "display": DisplayServer.get_name(), "server_version": "1.0.1", "trusted_code_execution": ProjectSettings.get_setting("hermes_mcp/allow_code_execution", true), "dap_port": plugin.dap.port, "runtime_sessions": plugin.debugger.status()}
 
 
 func _node(path: String) -> Node:

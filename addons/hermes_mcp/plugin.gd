@@ -11,7 +11,7 @@ var server: RefCounted
 var protocol: RefCounted
 var debugger: EditorDebuggerPlugin
 var dap: RefCounted
-var dock: VBoxContainer
+var dock: ScrollContainer
 var status_label: Label
 var endpoint := ""
 var bearer_token := ""
@@ -19,11 +19,8 @@ var events: Array = []
 var event_sequence := 0
 
 
-func _enable_plugin() -> void:
-	_ensure_autoload()
-
 func _disable_plugin() -> void:
-	if ProjectSettings.get_setting("autoload/" + AUTOLOAD_NAME, "") == "*" + RUNTIME_PATH:
+	if _owns_runtime_autoload():
 		remove_autoload_singleton(AUTOLOAD_NAME)
 
 func _enter_tree() -> void:
@@ -78,8 +75,18 @@ func _process(_delta: float) -> void:
 func _ensure_autoload() -> void:
 	if not ProjectSettings.has_setting("autoload/" + AUTOLOAD_NAME):
 		add_autoload_singleton(AUTOLOAD_NAME, RUNTIME_PATH)
-	elif ProjectSettings.get_setting("autoload/" + AUTOLOAD_NAME) != "*" + RUNTIME_PATH:
+	elif not _owns_runtime_autoload():
 		push_error("Hermes MCP: autoload name HermesMCPRuntime is already in use. Runtime tools will not work until the conflict is resolved.")
+
+func _owns_runtime_autoload() -> bool:
+	var path := str(ProjectSettings.get_setting("autoload/" + AUTOLOAD_NAME, "")).trim_prefix("*")
+	# Godot 4.6 saves autoloads as resource UIDs; older projects use res:// paths.
+	if path.begins_with("uid://"):
+		var uid := ResourceUID.text_to_id(path)
+		if not ResourceUID.has_id(uid):
+			return false
+		path = ResourceUID.get_id_path(uid)
+	return path == RUNTIME_PATH
 
 func _setting(key: String, value: Variant, type: int, hint: int = PROPERTY_HINT_NONE, hint_string: String = "") -> void:
 	if not ProjectSettings.has_setting(key): ProjectSettings.set_setting(key, value)
@@ -102,19 +109,26 @@ func _load_token() -> String:
 	return token
 
 func _build_dock() -> void:
-	dock = VBoxContainer.new()
+	# Wrapped labels can report enormous heights before a hidden dock gets its
+	# first layout. Keep that minimum size from expanding the whole editor.
+	dock = ScrollContainer.new()
 	dock.name = "Hermes MCP"
+	dock.custom_minimum_size = Vector2(160, 120) * EditorInterface.get_editor_scale()
+	dock.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock.add_child(content)
 	status_label = Label.new()
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dock.add_child(status_label)
+	content.add_child(status_label)
 	var copy := Button.new()
 	copy.text = "Copy Hermes configuration"
 	copy.pressed.connect(func() -> void: DisplayServer.clipboard_set(hermes_config()))
-	dock.add_child(copy)
+	content.add_child(copy)
 	var help := Label.new()
 	help.text = "Paste into ~/.hermes/config.yaml.\nProject Settings > Hermes MCP controls\nports and trusted code execution.\nRe-enable after changing ports."
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dock.add_child(help)
+	content.add_child(help)
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, dock)
 
 func hermes_config() -> String:

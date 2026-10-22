@@ -29,6 +29,12 @@ autoload in `project.godot` for playtesting. Disabling the plugin stops the
 listener and removes its autoload. The bridge is inert outside editor-launched
 debug sessions, including exported games.
 
+**Updating from v1.0.0:** Close Godot and replace only `addons/hermes_mcp` with
+the folder from the v1.0.1 ZIP, then reopen the project. Enable the plugin if
+you previously disabled it. This fixes the dock pushing FileSystem and the
+bottom panel offscreen, and the false `HermesMCPRuntime` conflict when Godot
+stores its autoload as a resource UID. Existing connection settings are retained.
+
 Example configuration (replace the token with the dock's generated value):
 
 ```yaml
@@ -183,9 +189,12 @@ editor APIs. See [architecture](docs/architecture.md) for the implementation.
 The installed plugin has no Python dependency; Python is used only by development
 tests, configuration printing and packaging.
 
-Verified locally with **Godot 4.5.1 on Linux**, including a graphical editor and
-game: all nine integration cases pass, and the official **MCP Python SDK 1.30.0**
-passes discovery, tool calls, resources, prompts and session cleanup. Windows,
+Verified locally with **Godot 4.5.1 and 4.6.1 on Linux**, including a graphical
+editor and game: all twelve integration cases pass, including dock bounds and
+autoload cleanup across re-enable and restart. One earlier 4.6.1 run returned
+an intermittent DAP `unknown` error while inspecting variables; the full rerun
+passed. Transport compatibility was previously verified with the official
+**MCP Python SDK 1.30.0** for discovery, tool calls, resources, prompts and session cleanup. Windows,
 macOS, other Godot versions and Hermes itself have not been run in this workspace.
 The test harness uses POSIX process groups; run it on Linux/macOS or CI.
 

@@ -5,6 +5,9 @@ permissions:
 jobs:
   integration:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        godot: ["4.5.1", "4.6.1"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -12,19 +15,19 @@ jobs:
           python-version: '3.12'
       - name: Install Godot and test dependencies
         run: |
-          curl -fL https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip -o /tmp/godot.zip
+          curl -fL https://github.com/godotengine/godot/releases/download/${{ matrix.godot }}-stable/Godot_v${{ matrix.godot }}-stable_linux.x86_64.zip -o /tmp/godot.zip
           unzip /tmp/godot.zip -d /tmp/godot
-          chmod +x /tmp/godot/Godot_v4.5.1-stable_linux.x86_64
+          chmod +x /tmp/godot/Godot_v${{ matrix.godot }}-stable_linux.x86_64
           python -m pip install 'mcp>=1.12,<2'
           sudo apt-get update
           sudo apt-get install -y xvfb libgl1-mesa-dri
       - name: Real engine integration
-        run: xvfb-run -a python tests/integration.py --godot /tmp/godot/Godot_v4.5.1-stable_linux.x86_64 --graphical
+        run: xvfb-run -a python tests/integration.py --godot /tmp/godot/Godot_v${{ matrix.godot }}-stable_linux.x86_64 --graphical
       - name: Official MCP SDK compatibility
-        run: python tests/sdk_smoke.py --godot /tmp/godot/Godot_v4.5.1-stable_linux.x86_64
+        run: python tests/sdk_smoke.py --godot /tmp/godot/Godot_v${{ matrix.godot }}-stable_linux.x86_64
       - name: Package addon
         run: python scripts/package.py
       - uses: actions/upload-artifact@v4
         with:
-          name: hermes-godot-mcp
+          name: hermes-godot-mcp-${{ matrix.godot }}
           path: dist/*.zip
