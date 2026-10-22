@@ -1,6 +1,6 @@
 # Hermes Godot MCP
 
-A native **Godot 4.5+ editor plugin** that exposes the open project to
+A native **Godot 4.6+ editor plugin** that exposes the open project to
 [Hermes Agent]([https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp](https://hermes-agent.nousresearch.com/))
 through MCP Streamable HTTP. Enabling the addon starts the server inside the
 editor; reopening that project starts it again. No Node.js, Python, sidecar
@@ -28,12 +28,6 @@ does not bypass that switch. The enabled plugin registers a `HermesMCPRuntime`
 autoload in `project.godot` for playtesting. Disabling the plugin stops the
 listener and removes its autoload. The bridge is inert outside editor-launched
 debug sessions, including exported games.
-
-**Updating from v1.0.0:** Close Godot and replace only `addons/hermes_mcp` with
-the folder from the v1.0.1 ZIP, then reopen the project. Enable the plugin if
-you previously disabled it. This fixes the dock pushing FileSystem and the
-bottom panel offscreen, and the false `HermesMCPRuntime` conflict when Godot
-stores its autoload as a resource UID. Existing connection settings are retained.
 
 Example configuration (replace the token with the dock's generated value):
 
